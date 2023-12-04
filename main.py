@@ -116,7 +116,6 @@ dataset = synth.ConceptDriftStream(
 
 
 from river import evaluate
-from river import forest
 from river import metrics
 
 model = GenericClassifier(n_classifiers=10)
