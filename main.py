@@ -140,7 +140,7 @@ class GenericNewClassifier(base.Classifier):
         self.window_to_create_new_count += 1
         
         # Check for concept drift
-        if self.adwin_detector.drift_detected:
+        if self.adwin_detector.change_detected:
             print("Concept drift detected!")
             self.instances_after_drift = 0  # Reset the count
             self.accuracy_window = []  # Reset the accuracy window
@@ -216,4 +216,4 @@ model = GenericNewClassifier(n_classifiers=10)
 
 metric = metrics.Accuracy()
 
-evaluate.progressive_val_score(dataset, model, metric, print_every=1000)
+evaluate.progressive_val_score(dataset, model, metric, print_every=100)
