@@ -226,10 +226,7 @@ for x, y in stream.iter_arff('electricity.arff', target='class'):
 
     # Optionally, update the metric with the true label and the prediction
     metric.update(finalY, prediction)
-    acc = metric.get()
-    # Optionally, print or store the current performance metric
-    print(f"Accuracy: {acc}")
-    
+    acc = metric.get()    
     
     if count_instances%100 == 0:
         with open('results2.csv', mode='a', newline='') as csvfile:
