@@ -4,6 +4,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Dense, BatchNormalization, Dropout
 from river import base, drift
 import random
+import csv
 
 class GenericNewClassifier(base.Classifier):
     def __init__(self, n_classifiers: int, hidden_units_range=(2, 10), learning_rate_range=(0.001, 0.01), max_instances_after_drift=1000, min_accuracy_change=0.05, max_classifiers_creation=2, max_classifiers=15):
@@ -93,10 +94,10 @@ class GenericNewClassifier(base.Classifier):
             self._initialize_classifiers(x)
 
         x_formatted = self._convert_to_input_format(x)
-
         # Get predictions and losses from all classifiers
         predictions = []
         losses = []
+        accuracies = []
         for classifier in self.classifiers:
             prediction = classifier.predict(x_formatted)
             loss = classifier.evaluate(x_formatted, self._convert_label_to_input_format(0))
@@ -107,10 +108,10 @@ class GenericNewClassifier(base.Classifier):
         # Find the index of the classifier with the minimum loss
         min_loss_index = np.argmin(losses)
         max_loss_index = np.argmax(losses)
+        
 
         # Use the classifier with the minimum loss for the final prediction
         final_prediction = 1 if predictions[min_loss_index][0] >= 0.5 else 0
-
         # Update correct predictions count
         self.correct_predictions += final_prediction == self._convert_label_to_input_format(1)
 
@@ -139,6 +140,7 @@ class GenericNewClassifier(base.Classifier):
         
         self.window_to_create_new_count += 1
         
+
         # Check for concept drift
         if self.adwin_detector.change_detected:
             print("Concept drift detected!")
@@ -169,7 +171,7 @@ class GenericNewClassifier(base.Classifier):
 
     def _train_single_classifier(self, classifier, x_train, y_train, epochs):
         for epoch in range(epochs):
-            classifier.fit(x_train, y_train, epochs=1, verbose=0)
+            classifier.fit(x_train, y_train, epochs=1, verbose=0, batch_size=32)
             # Simulate some work being done during training if needed
 
     def learn_one(self, x, y, epochs=1, **kwargs):
@@ -181,39 +183,57 @@ class GenericNewClassifier(base.Classifier):
 
         # Assuming features is the length of x, you might need to adjust this accordingly
         x_formatted = x_formatted.reshape((1, len(x)))
+        
+        
 
-        # Create and start threads for each classifier's training
-        threads = []
+        # Train each classifier sequentially
         for classifier in self.classifiers:
-            thread = threading.Thread(target=self._train_single_classifier, args=(classifier, x_formatted, y_formatted, epochs))
-            threads.append(thread)
-            thread.start()
+            self._train_single_classifier(classifier, x_formatted, y_formatted, epochs)
 
-        # Wait for all threads to finish
-        for thread in threads:
-            thread.join()
-            
         self.samples_seen += 1
-
-        accuracy = self.correct_predictions / self.samples_seen
+        
 
         return self
 
 
-from river import stream
-dataset = []
-for x, y in stream.iter_arff('electricity.arff', target='class'):
-    if y == 'UP':
-        dataset.append((x, 1))
-    else:
-        dataset.append((x, 0))
+import threading
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.layers import Dense, BatchNormalization, Dropout
+from river import base, drift
+import random
 
-
-from river import evaluate
-from river import metrics
+from river import datasets
 
 model = GenericNewClassifier(n_classifiers=10)
-
 metric = metrics.Accuracy()
 
-evaluate.progressive_val_score(dataset, model, metric, print_every=100)
+
+from river import stream
+dataset = []
+count_instances = 0
+for x, y in stream.iter_arff('electricity.arff', target='class'):
+    count_instances += 1
+    finalY = 0
+    if y == 'UP':
+        finalY = 1
+    
+    model.learn_one(x, finalY)
+
+    # Optionally, make predictions using the predict_one method
+    prediction = model.predict_one(x)
+
+    # Optionally, update the metric with the true label and the prediction
+    metric.update(finalY, prediction)
+    acc = metric.get()
+    # Optionally, print or store the current performance metric
+    print(f"Accuracy: {acc}")
+    
+    
+    if count_instances%100 == 0:
+        with open('results2.csv', mode='a', newline='') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            csv_writer.writerow([acc])
+
+
+        
